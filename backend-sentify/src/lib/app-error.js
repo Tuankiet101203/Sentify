@@ -28,6 +28,10 @@ function conflict(code, message, details) {
     return new AppError(409, code, message, details)
 }
 
+function tooManyRequests(code, message, details) {
+    return new AppError(429, code, message, details)
+}
+
 function badGateway(code, message, details) {
     return new AppError(502, code, message, details)
 }
@@ -39,5 +43,6 @@ module.exports = {
     forbidden,
     notFound,
     conflict,
+    tooManyRequests,
     badGateway,
 }

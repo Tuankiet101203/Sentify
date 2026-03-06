@@ -16,6 +16,7 @@ async function generateUniqueSlug(name) {
     const baseSlug = slugifyName(name) || 'restaurant'
 
     for (let attempt = 0; attempt < 100; attempt += 1) {
+        // Retry with numeric suffixes so restaurant URLs stay stable without manual slug input.
         const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`
         const existingRestaurant = await prisma.restaurant.findUnique({
             where: { slug },
@@ -36,6 +37,7 @@ async function createRestaurant(input) {
     const googleMapUrl = input.googleMapUrl?.trim() || null
     const slug = await generateUniqueSlug(name)
 
+    // Restaurant creation and OWNER membership must succeed together or rollback together.
     const result = await prisma.$transaction(async (tx) => {
         const restaurant = await tx.restaurant.create({
             data: {
@@ -92,6 +94,7 @@ async function listRestaurants({ userId }) {
         },
     })
 
+    // Include review counts here so the restaurant picker can render lightweight summary data directly.
     return memberships.map((membership) => ({
         id: membership.restaurant.id,
         name: membership.restaurant.name,
@@ -123,6 +126,7 @@ async function getRestaurantDetail({ userId, restaurantId }) {
 }
 
 async function updateRestaurant(input) {
+    // Only OWNER can change restaurant profile data in Sprint 1.
     const access = await getRestaurantAccess({
         userId: input.userId,
         restaurantId: input.restaurantId,
@@ -143,6 +147,7 @@ async function updateRestaurant(input) {
         data.googleMapUrl = input.googleMapUrl?.trim() || null
     }
 
+    // Keep slug stable after creation so existing frontend links and references do not drift.
     const restaurant = await prisma.restaurant.update({
         where: {
             id: access.restaurant.id,

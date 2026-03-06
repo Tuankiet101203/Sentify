@@ -6,6 +6,7 @@ const { scrapeGoogleReviews } = require('./google-scraper.service')
 const { analyzeReview } = require('./sentiment-analyzer.service')
 
 async function importReviews({ userId, restaurantId }) {
+    // Sprint 1 allows both OWNER and MANAGER to run imports for the selected restaurant.
     const access = await getRestaurantAccess({
         userId,
         restaurantId,
@@ -39,6 +40,7 @@ async function importReviews({ userId, restaurantId }) {
     const reviewsToCreate = []
 
     for (const review of scrapedReviews) {
+        // Dedup stays at the application layer first, then the DB unique key acts as the final guard.
         if (existingExternalIds.has(review.externalId)) {
             continue
         }
@@ -65,6 +67,7 @@ async function importReviews({ userId, restaurantId }) {
         })
     }
 
+    // Rebuild cached insight tables after every import so dashboard reads stay simple and fast.
     await recalculateRestaurantInsights({
         restaurantId,
     })

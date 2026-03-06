@@ -75,6 +75,7 @@ async function scrapeGoogleReviews({ googleMapUrl }) {
 
     const seed = crypto.createHash('sha1').update(googleMapUrl).digest('hex').slice(0, 10)
 
+    // Local Sprint 1 uses deterministic fixtures behind a scraper adapter so the import contract stays stable.
     return REVIEW_FIXTURES.map((fixture, index) => ({
         externalId: `google_${seed}_${index + 1}`,
         authorName: fixture.authorName,

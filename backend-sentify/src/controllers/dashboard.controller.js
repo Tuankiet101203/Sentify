@@ -39,6 +39,7 @@ async function getSentimentBreakdown(req, res) {
 
 async function getTrend(req, res) {
     try {
+        // Trend is the only dashboard endpoint with query input, so validate period at the controller boundary.
         const query = trendQuerySchema.parse(req.query)
         const result = await dashboardService.getTrend({
             userId: req.user.userId,

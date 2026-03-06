@@ -14,6 +14,7 @@ function toPercentage(count, total) {
 }
 
 function buildInsightSummary(summary) {
+    // Expose only dashboard fields here so API responses do not leak DB-specific metadata.
     const safeSummary = summary || {
         totalReviews: 0,
         averageRating: 0,
@@ -43,6 +44,7 @@ async function buildComplaintKeywordRows(restaurantId, reviews) {
               })).keywords
             : []
 
+        // Count each keyword once per review to avoid long repeated text inflating complaint stats.
         const uniqueKeywords = [...new Set(keywords)]
 
         for (const keyword of uniqueKeywords) {
@@ -106,6 +108,7 @@ async function recalculateRestaurantInsights({ restaurantId }) {
     const complaintKeywordRows = await buildComplaintKeywordRows(restaurantId, reviews)
 
     await prisma.$transaction(async (tx) => {
+        // Keep summary cache and complaint keywords in sync; dashboard should never read half-updated aggregates.
         await tx.insightSummary.upsert({
             where: {
                 restaurantId,

@@ -1,22 +1,31 @@
-require('dotenv').config()
-
 const cors = require('cors')
 const express = require('express')
+const helmet = require('helmet')
 
+const env = require('./config/env')
 const authRoutes = require('./routes/auth')
 const { sendError } = require('./lib/controller-error')
+const errorHandler = require('./middleware/error-handler')
+const { apiLimiter } = require('./middleware/rate-limit')
 const requestIdMiddleware = require('./middleware/request-id')
 const restaurantRoutes = require('./routes/restaurants')
 
 const app = express()
 
+app.disable('x-powered-by')
+app.set('trust proxy', env.TRUST_PROXY_VALUE)
 app.use(requestIdMiddleware)
 app.use(
     cors({
-        origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+        origin: env.CORS_ORIGINS,
+        methods: ['GET', 'POST', 'PATCH'],
+        allowedHeaders: ['Authorization', 'Content-Type'],
     }),
 )
-app.use(express.json())
+app.use(helmet())
+app.use(express.json({ limit: env.BODY_LIMIT }))
+app.use(express.urlencoded({ extended: false, limit: env.BODY_LIMIT }))
+app.use('/api', apiLimiter)
 
 app.get('/', (req, res) => {
     return res.status(200).json({
@@ -39,5 +48,7 @@ app.use('/api/restaurants', restaurantRoutes)
 app.use((req, res) => {
     return sendError(req, res, 404, 'NOT_FOUND', 'Resource not found')
 })
+
+app.use(errorHandler)
 
 module.exports = app

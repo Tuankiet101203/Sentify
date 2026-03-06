@@ -11,6 +11,7 @@ function parseEndDate(dateString) {
 }
 
 async function listReviews({ userId, restaurantId, rating, from, to, page = 1, limit = 20 }) {
+    // Keep review queries restaurant-scoped; list endpoints must never bypass membership checks.
     await getRestaurantAccess({
         userId,
         restaurantId,
@@ -42,6 +43,7 @@ async function listReviews({ userId, restaurantId, rating, from, to, page = 1, l
 
     const skip = (page - 1) * limit
 
+    // Count + page query run together so pagination metadata matches the same filter set.
     const [total, reviews] = await prisma.$transaction([
         prisma.review.count({ where }),
         prisma.review.findMany({

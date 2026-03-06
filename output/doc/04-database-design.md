@@ -79,6 +79,10 @@ model User {
   email        String           @unique
   fullName     String
   passwordHash String
+  tokenVersion Int              @default(0)
+  failedLoginCount Int          @default(0)
+  lockedUntil  DateTime?
+  lastLoginAt  DateTime?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
@@ -179,6 +183,8 @@ const prisma = new PrismaClient({ adapter })
 
 - `User.fullName` matches register request data
 - `passwordHash` makes the storage intent explicit
+- `tokenVersion` lets logout revoke active JWTs without storing every access token
+- `failedLoginCount` and `lockedUntil` support temporary account lockout after repeated failures
 - `Review.sentiment` supports dashboard percentages and keyword extraction
 - `InsightSummary` stores the exact KPI fields the dashboard needs
 - `ComplaintKeyword` is pre-aggregated so the complaints widget stays simple

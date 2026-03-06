@@ -1,12 +1,11 @@
-require('dotenv').config()
-
 const { PrismaPg } = require('@prisma/adapter-pg')
 const { PrismaClient } = require('@prisma/client')
+const env = require('../config/env')
 
 const globalForPrisma = globalThis
 
 const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: env.DATABASE_URL,
 })
 
 const prisma =

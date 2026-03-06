@@ -14,10 +14,18 @@ const loginSchema = z.object({
     password: z.string().min(1, 'Password is required'),
 })
 
+function buildRequestContext(req) {
+    return {
+        ip: req.ip,
+        requestId: req.requestId,
+        userAgent: req.get('user-agent') || null,
+    }
+}
+
 async function register(req, res) {
     try {
         const input = registerSchema.parse(req.body)
-        const result = await authService.register(input)
+        const result = await authService.register(input, buildRequestContext(req))
 
         return res.status(201).json({
             data: result,
@@ -30,7 +38,7 @@ async function register(req, res) {
 async function login(req, res) {
     try {
         const input = loginSchema.parse(req.body)
-        const result = await authService.login(input)
+        const result = await authService.login(input, buildRequestContext(req))
 
         return res.status(200).json({
             data: result,
@@ -42,10 +50,13 @@ async function login(req, res) {
 
 async function logout(req, res) {
     try {
+        const result = await authService.logout({
+            userId: req.user.userId,
+            context: buildRequestContext(req),
+        })
+
         return res.status(200).json({
-            data: {
-                message: 'Logged out successfully',
-            },
+            data: result,
         })
     } catch (error) {
         return handleControllerError(req, res, error)

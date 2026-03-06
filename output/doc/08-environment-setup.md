@@ -21,8 +21,9 @@ backend-sentify/
 ├── src/
 │   ├── app.js
 │   ├── server.js
+│   ├── config/
+│   ├── middleware/
 │   └── lib/
-│       └── prisma.js
 ├── .env
 ├── .env.example
 ├── prisma.config.ts
@@ -39,7 +40,7 @@ npm install
 If starting from scratch, the important packages are:
 
 ```bash
-npm install express cors dotenv @prisma/client @prisma/adapter-pg pg bcryptjs jsonwebtoken zod
+npm install express cors dotenv helmet express-rate-limit @prisma/client @prisma/adapter-pg pg bcryptjs jsonwebtoken zod
 npm install -D prisma nodemon
 ```
 
@@ -74,8 +75,21 @@ Create `backend-sentify/.env`:
 
 ```env
 DATABASE_URL="postgresql://postgres:YOUR_POSTGRES_PASSWORD@127.0.0.1:5432/sentify?schema=public"
-JWT_SECRET="replace-with-a-long-random-secret"
+JWT_SECRET="replace-with-a-long-random-secret-at-least-32-characters"
+JWT_ISSUER="sentify-api"
+JWT_AUDIENCE="sentify-web"
 CORS_ORIGIN="http://localhost:5173"
+BODY_LIMIT="100kb"
+API_RATE_LIMIT_WINDOW_MS=900000
+API_RATE_LIMIT_MAX=500
+AUTH_RATE_LIMIT_WINDOW_MS=60000
+AUTH_RATE_LIMIT_MAX=5
+REGISTER_RATE_LIMIT_WINDOW_MS=900000
+REGISTER_RATE_LIMIT_MAX=10
+IMPORT_RATE_LIMIT_WINDOW_MS=900000
+IMPORT_RATE_LIMIT_MAX=10
+LOGIN_LOCK_THRESHOLD=5
+LOGIN_LOCK_MINUTES=15
 PORT=3000
 ```
 
@@ -84,8 +98,21 @@ PORT=3000
 | Variable | Required | Description |
 |----------|:--------:|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string for Prisma |
-| `JWT_SECRET` | Yes | Secret used to sign access tokens |
+| `JWT_SECRET` | Yes | Secret used to sign access tokens, minimum 32 characters |
+| `JWT_ISSUER` | No | Expected JWT issuer, default `sentify-api` |
+| `JWT_AUDIENCE` | No | Expected JWT audience, default `sentify-web` |
 | `CORS_ORIGIN` | Yes | Frontend origin allowed by the API |
+| `BODY_LIMIT` | No | Max JSON or form body size accepted by Express |
+| `API_RATE_LIMIT_WINDOW_MS` | No | Sliding window for general API limiter |
+| `API_RATE_LIMIT_MAX` | No | Max requests per window for general API limiter |
+| `AUTH_RATE_LIMIT_WINDOW_MS` | No | Sliding window for login limiter |
+| `AUTH_RATE_LIMIT_MAX` | No | Max login attempts per window before 429 |
+| `REGISTER_RATE_LIMIT_WINDOW_MS` | No | Sliding window for register limiter |
+| `REGISTER_RATE_LIMIT_MAX` | No | Max register attempts per window before 429 |
+| `IMPORT_RATE_LIMIT_WINDOW_MS` | No | Sliding window for import limiter |
+| `IMPORT_RATE_LIMIT_MAX` | No | Max import attempts per window before 429 |
+| `LOGIN_LOCK_THRESHOLD` | No | Number of failed password attempts before temporary lockout |
+| `LOGIN_LOCK_MINUTES` | No | Length of the temporary login lockout window |
 | `PORT` | No | Express port, default `3000` |
 | `OPENAI_API_KEY` | No | Only needed if using OpenAI fallback for sentiment |
 

@@ -125,7 +125,7 @@ HTTP request
 | GET | `/health` | Health check |
 | POST | `/api/auth/register` | Create account |
 | POST | `/api/auth/login` | Issue access token |
-| POST | `/api/auth/logout` | Client session logout acknowledgement |
+| POST | `/api/auth/logout` | Revoke active tokens for the current user |
 | POST | `/api/restaurants` | Create restaurant |
 | GET | `/api/restaurants` | List current user's restaurants |
 | GET | `/api/restaurants/:id` | Restaurant detail |
@@ -144,7 +144,10 @@ HTTP request
 - JWT access token only in Sprint 1
 - Access token should be short-lived, for example 15 minutes
 - Passwords must be stored as bcrypt hashes
-- Logout is client-driven in Sprint 1: client deletes token; no refresh token rotation or token blacklist yet
+- JWT should include `iss`, `aud`, `sub`, and `jti`
+- JWT should carry `tokenVersion` so logout can revoke older tokens without a blacklist table
+- Logout increments `User.tokenVersion`, so previously issued access tokens become invalid
+- Repeated failed logins trigger temporary account lockout at the application layer
 
 ### Authorization
 
@@ -157,6 +160,10 @@ HTTP request
 
 - Dedup reviews with `(restaurantId, externalId)` unique constraint
 - Validate input bodies before reaching business logic
+- Reject malformed JSON with a consistent `400 INVALID_JSON`
+- Enforce request body size limits to protect the API from oversized payloads
+- Apply route-level rate limits on general API traffic, auth endpoints, and review import
+- Return baseline security headers and hide framework fingerprints
 - Do not store plaintext passwords
 - Keep DB credentials and JWT secret in `.env`
 
@@ -179,11 +186,14 @@ Common codes:
 | Code | HTTP | Meaning |
 |------|------|---------|
 | `VALIDATION_FAILED` | 400 | Invalid request data |
+| `INVALID_JSON` | 400 | Malformed JSON body |
 | `AUTH_INVALID_CREDENTIALS` | 401 | Wrong email/password |
+| `AUTH_REVOKED_TOKEN` | 401 | JWT was revoked by logout or token version mismatch |
 | `AUTH_TOKEN_EXPIRED` | 401 | JWT expired |
 | `FORBIDDEN` | 403 | User is not a member of the restaurant |
 | `NOT_FOUND` | 404 | Resource not found |
 | `AUTH_RATE_LIMITED` | 429 | Too many failed login attempts |
+| `IMPORT_RATE_LIMITED` | 429 | Too many import attempts in the rate-limit window |
 | `SCRAPE_FAILED` | 502 | Scraper returned invalid or empty result |
 
 ## 3.9 Deployment Notes
@@ -199,6 +209,9 @@ Environment variables:
 ```env
 DATABASE_URL=postgresql://postgres:YOUR_POSTGRES_PASSWORD@127.0.0.1:5432/sentify?schema=public
 JWT_SECRET=replace-with-a-long-random-secret
+JWT_ISSUER=sentify-api
+JWT_AUDIENCE=sentify-web
 CORS_ORIGIN=http://localhost:5173
+BODY_LIMIT=100kb
 PORT=3000
 ```

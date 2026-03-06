@@ -109,8 +109,8 @@ Authorization: Bearer <access_token>
 
 ### POST `/auth/logout`
 
-Sprint 1 logout is simple: the client clears its access token.
-The server can still expose an acknowledgement endpoint.
+Sprint 1 logout is stateless at the transport layer, but the backend still revokes
+older access tokens by incrementing `User.tokenVersion`.
 
 **Auth:** JWT required
 
@@ -342,13 +342,17 @@ Query params:
 | Code | HTTP | Meaning |
 |------|------|---------|
 | `VALIDATION_FAILED` | 400 | Invalid request payload |
+| `INVALID_JSON` | 400 | Malformed JSON body |
 | `INVALID_DATE_RANGE` | 400 | `from` date is after `to` date |
 | `MISSING_GOOGLE_MAP_URL` | 400 | Restaurant has no Google Maps URL |
 | `AUTH_INVALID_CREDENTIALS` | 401 | Wrong login data |
 | `AUTH_MISSING_TOKEN` | 401 | JWT is missing |
 | `AUTH_INVALID_TOKEN` | 401 | JWT is invalid |
 | `AUTH_TOKEN_EXPIRED` | 401 | JWT expired |
+| `AUTH_REVOKED_TOKEN` | 401 | JWT was revoked by logout or token version mismatch |
 | `FORBIDDEN` | 403 | User lacks restaurant access |
 | `NOT_FOUND` | 404 | Restaurant or review not found |
 | `AUTH_RATE_LIMITED` | 429 | Too many failed logins |
+| `IMPORT_RATE_LIMITED` | 429 | Too many import attempts in the current window |
+| `PAYLOAD_TOO_LARGE` | 413 | Request body exceeded the configured size limit |
 | `SCRAPE_FAILED` | 502 | Scraper failed |

@@ -27,6 +27,7 @@ async function getRestaurantAccess({
     allowedPermissions,
     restaurantInclude,
 }) {
+    // Membership is the source of truth for both visibility and permission checks in Sprint 1.
     const membership = await prisma.restaurantUser.findFirst({
         where: {
             userId,

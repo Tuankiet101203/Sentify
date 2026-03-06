@@ -18,6 +18,7 @@ Project 3/
 │   ├── src/
 │   │   ├── app.js
 │   │   ├── server.js
+│   │   ├── config/
 │   │   ├── controllers/
 │   │   ├── lib/
 │   │   ├── middleware/
@@ -48,11 +49,12 @@ Prisma 7 no longer keeps the datasource URL inside `schema.prisma`.
 
 ```text
 backend-sentify/src/
+├── config/              # env parsing, defaults, and runtime validation
 ├── routes/              # auth.js, restaurants.js
 ├── controllers/         # auth, restaurants, import, reviews, dashboard
 ├── services/            # auth, restaurant, scraper, sentiment, insight, dashboard
-├── middleware/          # JWT auth, requestId
-└── lib/                 # Prisma client, AppError, controller error mapper
+├── middleware/          # JWT auth, requestId, rate limits, app error handler
+└── lib/                 # Prisma client, AppError, controller error mapper, security event logger
 ```
 
 ## 6.3 Suggested Growth Order
@@ -61,6 +63,7 @@ backend-sentify/src/
 
 - `src/app.js`
 - `src/server.js`
+- `src/config/env.js`
 - `prisma/schema.prisma`
 - `prisma.config.ts`
 - `src/lib/prisma.js`

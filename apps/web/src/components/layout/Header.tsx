@@ -1,73 +1,147 @@
-import { useTheme } from '../../contexts/ThemeContext'
+import { useEffect, useRef, useState } from 'react'
+import { LANGUAGE_OPTIONS, useLanguage } from '../../contexts/languageContext'
+import { useTheme } from '../../contexts/useTheme'
 
 export function Header() {
-    const { theme, toggleTheme } = useTheme()
+  const { theme, toggleTheme } = useTheme()
+  const { language, setLanguage, copy } = useLanguage()
+  const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false)
+  const languageMenuRef = useRef<HTMLDivElement | null>(null)
 
-    return (
-        <header className="fixed inset-x-0 top-2 md:top-3 z-50 flex justify-center pointer-events-none">
-            <div className="w-full max-w-[1080px] mx-4 pointer-events-auto frosted-glass bg-surface-white/80 dark:bg-surface-dark/90 dark:backdrop-blur-xl border border-border-light/70 dark:border-border-dark/70 rounded-full shadow-[0_4px_30px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.5)] px-4 md:px-6 h-14 flex items-center gap-8 transition-all duration-300 hover:border-primary/30 dark:hover:border-primary/20 hover:shadow-[0_10px_40px_-10px_rgba(212,175,55,0.15)]">
+  const currentLanguage =
+    LANGUAGE_OPTIONS.find((option) => option.code === language) ?? LANGUAGE_OPTIONS[0]
 
-                {/* Logo */}
-                <a className="flex items-center gap-2 group cursor-pointer mr-2" href="#">
-                    <div className="size-6 text-primary transition-transform duration-500 group-hover:rotate-180">
-                        <span className="material-symbols-outlined text-2xl">token</span>
-                    </div>
-                    <span className="text-text-charcoal dark:text-white text-lg font-bold tracking-tight hidden sm:block">
-                        InsightFlow
-                    </span>
-                </a>
+  useEffect(() => {
+    if (!isLanguageMenuOpen) {
+      return undefined
+    }
 
-                {/* Navigation */}
-                <nav className="hidden md:flex items-center gap-6">
-                    {['Solutions', 'Platform', 'Pricing', 'Resources'].map((item) => (
-                        <a
-                            key={item}
-                            className="text-xs font-medium text-text-silver-light dark:text-text-silver-dark hover:text-primary-dark dark:hover:text-primary transition-colors uppercase tracking-wide"
-                            href="#"
-                        >
-                            {item}
-                        </a>
-                    ))}
-                </nav>
+    function handlePointerDown(event: MouseEvent) {
+      if (!languageMenuRef.current?.contains(event.target as Node)) {
+        setIsLanguageMenuOpen(false)
+      }
+    }
 
-                {/* Right actions */}
-                <div className="flex items-center gap-3 ml-auto">
-                    {/* Theme toggle */}
-                    <button
-                        onClick={(e) => toggleTheme(e)}
-                        aria-label="Toggle theme"
-                        className="flex items-center justify-center size-8 rounded-full text-text-silver-light dark:text-text-silver-dark hover:text-primary hover:bg-black/5 dark:hover:bg-white/5 transition-all duration-200 hover:scale-110 active:scale-90 hover:shadow-[0_0_12px_rgba(212,175,55,0.3)]"
-                    >
-                        <span className="material-symbols-outlined text-lg">
-                            {theme === 'dark' ? 'dark_mode' : 'light_mode'}
-                        </span>
-                    </button>
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsLanguageMenuOpen(false)
+      }
+    }
 
-                    {/* Language selector */}
-                    <div className="relative group">
-                        <button className="flex items-center gap-1 text-xs font-bold text-text-silver-light dark:text-text-silver-dark hover:text-text-charcoal dark:hover:text-white transition-colors h-8 px-2 rounded hover:bg-black/5 dark:hover:bg-white/5">
-                            <span className="uppercase">EN</span>
-                            <span className="material-symbols-outlined text-base">expand_more</span>
-                        </button>
-                        <div className="absolute right-0 top-full mt-2 w-24 bg-surface-white dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right z-50">
-                            <div className="py-1">
-                                <a className="block px-4 py-2 text-xs text-primary bg-primary/5 dark:bg-white/5 font-medium" href="#">EN</a>
-                                <a className="block px-4 py-2 text-xs text-text-silver-light dark:text-text-silver-dark hover:bg-black/5 dark:hover:bg-white/5 hover:text-text-charcoal dark:hover:text-white transition-colors" href="#">VI</a>
-                                <a className="block px-4 py-2 text-xs text-text-silver-light dark:text-text-silver-dark hover:bg-black/5 dark:hover:bg-white/5 hover:text-text-charcoal dark:hover:text-white transition-colors" href="#">JP</a>
-                            </div>
-                        </div>
-                    </div>
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
 
-                    <div className="h-4 w-px bg-border-light dark:bg-border-dark mx-1 hidden sm:block"></div>
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isLanguageMenuOpen])
 
-                    <button className="hidden sm:block text-xs font-bold text-text-charcoal dark:text-white hover:text-primary-dark dark:hover:text-primary transition-colors px-2">
-                        Log In
-                    </button>
-                    <button className="flex items-center justify-center px-4 h-9 rounded-full bg-primary text-white dark:text-bg-dark text-xs font-bold hover:bg-primary-dark dark:hover:bg-yellow-400 transition-colors shadow-[0_4px_14px_rgba(212,175,55,0.4)] dark:shadow-[0_0_10px_rgba(242,208,13,0.15)] hover:shadow-[0_6px_20px_rgba(212,175,55,0.6)] dark:hover:shadow-[0_0_20px_rgba(242,208,13,0.3)]">
-                        Get Started
-                    </button>
-                </div>
+  return (
+    <header className="pointer-events-none fixed inset-x-0 top-2 z-50 flex justify-center md:top-3">
+      <div className="pointer-events-auto mx-4 flex h-14 w-full max-w-[1180px] items-center gap-8 rounded-full border border-border-light/70 bg-surface-white/80 px-4 shadow-[0_4px_30px_rgba(0,0,0,0.03)] transition-all duration-300 hover:border-primary/30 hover:shadow-[0_10px_40px_-10px_rgba(212,175,55,0.15)] dark:border-border-dark/70 dark:bg-surface-dark/90 dark:shadow-[0_4px_30px_rgba(0,0,0,0.5)] dark:backdrop-blur-xl md:px-6">
+        <a className="group mr-2 flex cursor-pointer items-center gap-2" href="#overview">
+          <div className="size-6 text-primary transition-transform duration-500 group-hover:rotate-180">
+            <span className="material-symbols-outlined text-2xl">token</span>
+          </div>
+          <span className="hidden text-lg font-bold tracking-tight text-text-charcoal dark:text-white sm:block">
+            {copy.header.brand}
+          </span>
+        </a>
+
+        <nav className="hidden items-center gap-6 md:flex">
+          {copy.header.nav.map((item) => (
+            <a
+              key={item.label}
+              className="text-xs font-medium uppercase tracking-wide text-text-silver-light transition-colors hover:text-primary-dark dark:text-text-silver-dark dark:hover:text-primary"
+              href={item.href}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={(event) => toggleTheme(event)}
+            aria-label={copy.header.themeLabel}
+            className="flex size-8 items-center justify-center rounded-full text-text-silver-light transition-all duration-200 hover:scale-110 hover:bg-black/5 hover:text-primary hover:shadow-[0_0_12px_rgba(212,175,55,0.3)] active:scale-90 dark:text-text-silver-dark dark:hover:bg-white/5"
+          >
+            <span className="material-symbols-outlined text-lg">
+              {theme === 'dark' ? 'dark_mode' : 'light_mode'}
+            </span>
+          </button>
+          <div className="relative" ref={languageMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsLanguageMenuOpen((current) => !current)}
+              aria-label={copy.header.languageLabel}
+              aria-haspopup="menu"
+              aria-expanded={isLanguageMenuOpen}
+              className="flex h-8 items-center gap-2 rounded-full border border-border-light px-3 text-xs font-bold text-text-charcoal transition-all duration-200 hover:border-primary/40 hover:text-primary dark:border-border-dark dark:text-white"
+            >
+              <span>{currentLanguage.label}</span>
+              <span
+                className={`material-symbols-outlined text-base transition-transform duration-200 ${
+                  isLanguageMenuOpen ? 'rotate-180' : ''
+                }`}
+              >
+                expand_more
+              </span>
+            </button>
+
+            <div
+              className={`absolute right-0 top-[calc(100%+0.65rem)] min-w-[10rem] overflow-hidden rounded-2xl border border-border-light/80 bg-surface-white/95 p-1 shadow-[0_18px_40px_-20px_rgba(0,0,0,0.45)] backdrop-blur-xl transition-all duration-200 dark:border-border-dark/80 dark:bg-surface-dark/95 ${
+                isLanguageMenuOpen
+                  ? 'pointer-events-auto translate-y-0 opacity-100'
+                  : 'pointer-events-none -translate-y-1 opacity-0'
+              }`}
+              role="menu"
+              aria-label={copy.header.languageLabel}
+            >
+              {LANGUAGE_OPTIONS.map((option) => {
+                const isActive = option.code === language
+
+                return (
+                  <button
+                    key={option.code}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={isActive}
+                    onClick={() => {
+                      setLanguage(option.code)
+                      setIsLanguageMenuOpen(false)
+                    }}
+                    className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition-colors ${
+                      isActive
+                        ? 'bg-primary/10 font-semibold text-primary'
+                        : 'text-text-silver-light hover:bg-black/5 hover:text-text-charcoal dark:text-text-silver-dark dark:hover:bg-white/5 dark:hover:text-white'
+                    }`}
+                  >
+                    <span>{option.label}</span>
+                    {isActive ? (
+                      <span className="material-symbols-outlined text-base">check</span>
+                    ) : null}
+                  </button>
+                )
+              })}
             </div>
-        </header>
-    )
+          </div>
+
+          <a
+            className="hidden px-2 text-xs font-bold text-text-charcoal transition-colors hover:text-primary-dark dark:text-white dark:hover:text-primary sm:block"
+            href="#workflow"
+          >
+            {copy.header.workflowCta}
+          </a>
+          <a
+            className="flex h-9 items-center justify-center rounded-full bg-primary px-4 text-xs font-bold text-white shadow-[0_4px_14px_rgba(212,175,55,0.4)] transition-colors hover:bg-primary-dark hover:shadow-[0_6px_20px_rgba(212,175,55,0.6)] dark:text-bg-dark dark:hover:bg-yellow-400 dark:hover:shadow-[0_0_20px_rgba(242,208,13,0.3)]"
+            href="#dashboard"
+          >
+            {copy.header.dashboardCta}
+          </a>
+        </div>
+      </div>
+    </header>
+  )
 }

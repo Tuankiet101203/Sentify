@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+﻿import { memo, useEffect, useMemo, useState } from 'react'
 import { buildSphereLayers } from './asciiGlobeEngine'
 import { GlobeInsightCards } from './GlobeInsightCards'
 
@@ -96,4 +96,3 @@ export const AsciiGlobe = memo(function AsciiGlobe() {
     </div>
   )
 })
-

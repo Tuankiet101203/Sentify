@@ -1,37 +1,84 @@
-interface MarqueeTickerProps {
-    className?: string
-    compact?: boolean
-}
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useLanguage } from '../../contexts/languageContext'
 
-const tickerItems = [
-    { icon: 'bolt', text: 'Supply Chain Optimized +15%' },
-    { icon: 'trending_up', text: 'Q3 Predictions: Bullish' },
-    { icon: 'language', text: 'Delivery speed up 15%' },
-    { icon: 'psychology', text: 'Sentiment Analysis: Positive Shift' },
-    { icon: 'security', text: 'Threat Detected & Neutralized' },
-]
+const BASE_SCROLL_SPEED = 84
+const COMPACT_SCROLL_SPEED = 92
 
-export function MarqueeTicker({ className = '', compact = false }: MarqueeTickerProps) {
-    const verticalPadding = compact ? 'py-3 md:py-3.5' : 'py-4'
-    const textSize = compact ? 'text-xs md:text-sm' : 'text-sm'
-    const rootClassName =
-        `marquee-ticker w-full bg-surface-ticker-light/92 dark:bg-surface-ticker-dark/88 border-y border-border-light dark:border-border-dark ${verticalPadding} overflow-hidden relative ${className}`.trim()
+export function MarqueeTicker({ compact = false }: { compact?: boolean }) {
+  const { copy } = useLanguage()
+  const trackRef = useRef<HTMLDivElement | null>(null)
+  const [trackWidth, setTrackWidth] = useState(0)
 
-    return (
-        <div className={rootClassName}>
-            <div className="flex w-full whitespace-nowrap animate-marquee">
-                <div className="flex items-center gap-10 md:gap-12 px-6">
-                    {[...tickerItems, ...tickerItems].map((item, i) => (
-                        <span
-                            key={i}
-                            className={`flex items-center gap-2 ${textSize} text-text-silver-light dark:text-text-silver-dark font-medium`}
-                        >
-                            <span className="material-symbols-outlined text-primary text-base md:text-lg">{item.icon}</span>
-                            {item.text}
-                        </span>
-                    ))}
+  const tickerItems = useMemo(() => copy.ticker, [copy.ticker])
+
+  useEffect(() => {
+    const element = trackRef.current
+
+    if (!element) {
+      return undefined
+    }
+
+    const updateWidth = () => {
+      const nextWidth = Math.ceil(element.scrollWidth)
+      setTrackWidth((current) => (current === nextWidth ? current : nextWidth))
+    }
+
+    updateWidth()
+
+    const resizeObserver = new ResizeObserver(updateWidth)
+    resizeObserver.observe(element)
+    window.addEventListener('resize', updateWidth)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateWidth)
+    }
+  }, [tickerItems])
+
+  const durationSeconds = useMemo(() => {
+    if (!trackWidth) {
+      return compact ? 24 : 28
+    }
+
+    const speed = compact ? COMPACT_SCROLL_SPEED : BASE_SCROLL_SPEED
+    return Math.max(trackWidth / speed, compact ? 18 : 22)
+  }, [compact, trackWidth])
+
+  const marqueeStyle = {
+    '--marquee-track-width': `${trackWidth}px`,
+    '--marquee-duration': `${durationSeconds.toFixed(2)}s`,
+  } as CSSProperties
+
+  return (
+    <div
+      className={`marquee-ticker overflow-hidden border-y border-border-light/70 bg-surface-ticker-light/90 dark:border-border-dark dark:bg-surface-ticker-dark/90 ${
+        compact ? 'py-4' : 'py-5'
+      }`}
+    >
+      <div className="marquee-viewport">
+        <div className="marquee-lane" style={marqueeStyle}>
+          {[0, 1].map((copyIndex) => (
+            <div
+              key={copyIndex}
+              ref={copyIndex === 0 ? trackRef : undefined}
+              className="marquee-track"
+              aria-hidden={copyIndex === 1}
+            >
+              {tickerItems.map((item, index) => (
+                <div
+                  key={`${copyIndex}-${item}-${index}`}
+                  className="inline-flex items-center gap-3 text-sm font-medium text-text-silver-light dark:text-text-silver-dark"
+                >
+                  <span className="material-symbols-outlined text-base text-primary">
+                    radio_button_checked
+                  </span>
+                  <span>{item}</span>
                 </div>
+              ))}
             </div>
+          ))}
         </div>
-    )
+      </div>
+    </div>
+  )
 }

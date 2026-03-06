@@ -1,13 +1,5 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
-
-type Theme = 'light' | 'dark'
-
-interface ThemeContextType {
-    theme: Theme
-    toggleTheme: (e?: React.MouseEvent) => void
-}
-
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import { ThemeContext, type Theme } from './useTheme'
 
 /**
  * Spawns a brief radial flash + shockwave ring at the click origin.
@@ -193,10 +185,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             {children}
         </ThemeContext.Provider>
     )
-}
-
-export function useTheme() {
-    const ctx = useContext(ThemeContext)
-    if (!ctx) throw new Error('useTheme must be used within ThemeProvider')
-    return ctx
 }

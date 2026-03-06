@@ -1,4 +1,4 @@
-import { isLandFast } from './earthLandMask'
+﻿import { isLandFast } from './earthLandMask'
 
 export type SphereLayers = {
   shadow: string

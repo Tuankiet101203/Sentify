@@ -1,5 +1,5 @@
 const prisma = require('../lib/prisma')
-const { analyzeReview } = require('./sentiment-analyzer.service')
+const { extractComplaintKeywords } = require('./sentiment-analyzer.service')
 
 function roundNumber(value, digits = 1) {
     return Number(Number(value || 0).toFixed(digits))
@@ -33,22 +33,15 @@ function buildInsightSummary(summary) {
 }
 
 async function buildComplaintKeywordRows(restaurantId, reviews) {
-    const negativeReviews = reviews.filter((review) => review.sentiment === 'NEGATIVE')
     const keywordCounts = new Map()
-    const analyzedReviews = await Promise.all(
-        negativeReviews.map(async (review) => ({
-            keywords: review.content
-                ? (
-                      await analyzeReview({
-                          content: review.content,
-                          rating: review.rating,
-                      })
-                  ).keywords
-                : [],
-        })),
-    )
+    const negativeReviews = reviews.filter((review) => review.sentiment === 'NEGATIVE')
 
-    for (const { keywords } of analyzedReviews) {
+    for (const review of negativeReviews) {
+        const keywords =
+            Array.isArray(review.keywords) && review.keywords.length > 0
+                ? review.keywords
+                : extractComplaintKeywords(review.content)
+
         // Count each keyword once per review to avoid long repeated text inflating complaint stats.
         const uniqueKeywords = [...new Set(keywords)]
 
@@ -76,33 +69,58 @@ async function buildComplaintKeywordRows(restaurantId, reviews) {
 }
 
 async function recalculateRestaurantInsights({ restaurantId }) {
-    const reviews = await prisma.review.findMany({
-        where: {
-            restaurantId,
-        },
-        select: {
-            rating: true,
-            sentiment: true,
-            content: true,
-        },
-    })
+    const [reviewAggregate, sentimentGroups, negativeReviews] = await Promise.all([
+        prisma.review.aggregate({
+            where: {
+                restaurantId,
+            },
+            _count: {
+                _all: true,
+            },
+            _avg: {
+                rating: true,
+            },
+        }),
+        prisma.review.groupBy({
+            by: ['sentiment'],
+            where: {
+                restaurantId,
+                sentiment: {
+                    not: null,
+                },
+            },
+            _count: {
+                _all: true,
+            },
+        }),
+        prisma.review.findMany({
+            where: {
+                restaurantId,
+                sentiment: 'NEGATIVE',
+            },
+            select: {
+                sentiment: true,
+                content: true,
+                keywords: true,
+            },
+        }),
+    ])
 
-    const totalReviews = reviews.length
-    const ratingSum = reviews.reduce((sum, review) => sum + review.rating, 0)
+    const totalReviews = reviewAggregate._count._all
     const sentimentCounts = {
         POSITIVE: 0,
         NEUTRAL: 0,
         NEGATIVE: 0,
     }
 
-    for (const review of reviews) {
-        if (review.sentiment && sentimentCounts[review.sentiment] !== undefined) {
-            sentimentCounts[review.sentiment] += 1
+    for (const group of sentimentGroups) {
+        if (group.sentiment && sentimentCounts[group.sentiment] !== undefined) {
+            sentimentCounts[group.sentiment] = group._count._all
         }
     }
 
     const insightPayload = {
-        averageRating: totalReviews ? roundNumber(ratingSum / totalReviews, 1) : 0,
+        averageRating: totalReviews ? roundNumber(reviewAggregate._avg.rating, 1) : 0,
         totalReviews,
         positivePercentage: toPercentage(sentimentCounts.POSITIVE, totalReviews),
         neutralPercentage: toPercentage(sentimentCounts.NEUTRAL, totalReviews),
@@ -110,7 +128,7 @@ async function recalculateRestaurantInsights({ restaurantId }) {
         lastCalculatedAt: new Date(),
     }
 
-    const complaintKeywordRows = await buildComplaintKeywordRows(restaurantId, reviews)
+    const complaintKeywordRows = await buildComplaintKeywordRows(restaurantId, negativeReviews)
 
     await prisma.$transaction(async (tx) => {
         // Keep summary cache and complaint keywords in sync; dashboard should never read half-updated aggregates.

@@ -79,6 +79,7 @@ model Review {
   rating       Int
   content      String?
   sentiment    ReviewSentiment?
+  keywords     String[]         @default([])
   reviewDate   DateTime?
   createdAt    DateTime         @default(now())
 

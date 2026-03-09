@@ -1,3 +1,4 @@
+const env = require('../config/env')
 const prisma = require('../lib/prisma')
 const { getRestaurantAccess } = require('./restaurant-access.service')
 const reviewImportService = require('./review-import.service')
@@ -45,12 +46,53 @@ function buildRunSummary(importRun) {
     }
 }
 
+function buildExpiredActiveRunWhere({ restaurantId } = {}) {
+    const staleCutoff = new Date(Date.now() - env.IMPORT_RUN_STALE_MS)
+
+    return {
+        ...(restaurantId ? { restaurantId } : {}),
+        OR: [
+            {
+                status: 'QUEUED',
+                updatedAt: {
+                    lt: staleCutoff,
+                },
+            },
+            {
+                status: 'RUNNING',
+                updatedAt: {
+                    lt: staleCutoff,
+                },
+            },
+        ],
+    }
+}
+
+async function failExpiredActiveRuns({ restaurantId } = {}) {
+    const failedAt = new Date()
+
+    return prisma.importRun.updateMany({
+        where: buildExpiredActiveRunWhere({ restaurantId }),
+        data: {
+            status: 'FAILED',
+            failedAt,
+            phase: 'FAILED',
+            progressPercent: 100,
+            message: 'Import stopped because the worker stopped responding.',
+            errorCode: 'IMPORT_WORKER_STALE',
+            errorMessage: 'The import worker stopped sending heartbeats before the run could finish.',
+        },
+    })
+}
+
 async function getLatestImportRun({ userId, restaurantId }) {
     await getRestaurantAccess({
         userId,
         restaurantId,
         allowedPermissions: ['OWNER', 'MANAGER'],
     })
+
+    await failExpiredActiveRuns({ restaurantId })
 
     const importRun = await prisma.importRun.findFirst({
         where: {
@@ -70,6 +112,8 @@ async function listImportRuns({ userId, restaurantId, limit = DEFAULT_IMPORT_HIS
         restaurantId,
         allowedPermissions: ['OWNER', 'MANAGER'],
     })
+
+    await failExpiredActiveRuns({ restaurantId })
 
     const safeLimit = Math.min(Math.max(Number(limit) || DEFAULT_IMPORT_HISTORY_LIMIT, 1), MAX_IMPORT_HISTORY_LIMIT)
 
@@ -107,6 +151,26 @@ async function recoverStaleImportRuns() {
     })
 }
 
+function startRunHeartbeat(runId) {
+    const heartbeatTimer = setInterval(() => {
+        void prisma.importRun
+            .updateMany({
+                where: {
+                    id: runId,
+                    status: 'RUNNING',
+                },
+                data: {
+                    updatedAt: new Date(),
+                },
+            })
+            .catch(() => {})
+    }, env.IMPORT_RUN_HEARTBEAT_MS)
+
+    heartbeatTimer.unref?.()
+
+    return heartbeatTimer
+}
+
 async function updateRunAsStarted(runId) {
     const startedAt = new Date()
 
@@ -130,9 +194,10 @@ async function updateRunAsStarted(runId) {
 async function markRunCompleted(runId, result) {
     const completedAt = new Date()
 
-    await prisma.importRun.update({
+    await prisma.importRun.updateMany({
         where: {
             id: runId,
+            status: 'RUNNING',
         },
         data: {
             status: 'COMPLETED',
@@ -160,9 +225,12 @@ async function markRunCompleted(runId, result) {
 async function markRunFailed(runId, error) {
     const failedAt = new Date()
 
-    await prisma.importRun.update({
+    await prisma.importRun.updateMany({
         where: {
             id: runId,
+            status: {
+                in: ACTIVE_IMPORT_STATUSES,
+            },
         },
         data: {
             status: 'FAILED',
@@ -195,6 +263,7 @@ async function runImportJob(importRunId) {
 
     const lockKey = importRun.restaurantId
     activeRestaurantRuns.add(lockKey)
+    let heartbeatTimer = null
 
     try {
         const wasStarted = await updateRunAsStarted(importRun.id)
@@ -202,6 +271,8 @@ async function runImportJob(importRunId) {
         if (!wasStarted) {
             return
         }
+
+        heartbeatTimer = startRunHeartbeat(importRun.id)
 
         const result = await reviewImportService.importReviews({
             userId: importRun.requestedByUserId,
@@ -224,6 +295,9 @@ async function runImportJob(importRunId) {
     } catch (error) {
         await markRunFailed(importRun.id, error)
     } finally {
+        if (heartbeatTimer) {
+            clearInterval(heartbeatTimer)
+        }
         activeRestaurantRuns.delete(lockKey)
     }
 }
@@ -244,6 +318,8 @@ async function queueImportRun({ userId, restaurantId }) {
     if (!access.restaurant.googleMapUrl) {
         return reviewImportService.importReviews({ userId, restaurantId })
     }
+
+    await failExpiredActiveRuns({ restaurantId })
 
     const activeImportRun = await prisma.importRun.findFirst({
         where: {
@@ -295,10 +371,13 @@ module.exports = {
     queueImportRun,
     recoverStaleImportRuns,
     __private: {
+        buildExpiredActiveRunWhere,
+        failExpiredActiveRuns,
         markRunCompleted,
         markRunFailed,
         runImportJob,
         scheduleImportRun,
+        startRunHeartbeat,
         updateRunAsStarted,
     },
 }

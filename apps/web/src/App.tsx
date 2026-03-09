@@ -468,7 +468,7 @@ function SentifyShell() {
   }, [route, session, authBootLoading])
 
   useEffect(() => {
-    if (!session?.user.id || !selectedRestaurantId || !isAppRoute(route)) {
+    if (!session?.user.id || !selectedRestaurantId) {
       setRestaurantDetail(null)
       setRestaurantError(null)
       setRestaurantLoading(false)
@@ -509,7 +509,7 @@ function SentifyShell() {
     return () => {
       cancelled = true
     }
-  }, [session?.user.id, route, selectedRestaurantId, sessionSyncKey])
+  }, [session?.user.id, selectedRestaurantId, sessionSyncKey])
 
   useEffect(() => {
     if (route !== '/app' || !session?.user.id || !selectedRestaurantId) {
@@ -610,7 +610,7 @@ function SentifyShell() {
   }, [session?.user.id, route, reviewFilters, selectedRestaurantId, sessionSyncKey])
 
   useEffect(() => {
-    if (!session?.user.id || !selectedRestaurantId || !isAppRoute(route)) {
+    if (!session?.user.id || !selectedRestaurantId) {
       setLatestImportRun(null)
       setImportRuns([])
       setImportRunsError(null)
@@ -657,7 +657,7 @@ function SentifyShell() {
     return () => {
       cancelled = true
     }
-  }, [session?.user.id, route, selectedRestaurantId, sessionSyncKey])
+  }, [session?.user.id, selectedRestaurantId, sessionSyncKey])
 
   useEffect(() => {
     if (!session?.user.id || !selectedRestaurantId || !isAppRoute(route)) {

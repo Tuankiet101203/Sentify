@@ -5,11 +5,44 @@ function clearModule(modulePath) {
     delete require.cache[require.resolve(modulePath)]
 }
 
+function loadEnv() {
+    clearModule('../src/config/env')
+    return require('../src/config/env')
+}
+
 function loadBrowserReviewTool() {
     clearModule('../src/config/env')
     clearModule('../src/services/google-browser-review-tool.service')
     return require('../src/services/google-browser-review-tool.service').__private
 }
+
+test('browser env auto-normalizes a profile subdirectory into user data root plus profile name', () => {
+    process.env.REVIEW_BROWSER_USER_DATA_DIR =
+        'C:\\Users\\tranb\\AppData\\Local\\Google\\Chrome\\User Data\\Default'
+    delete process.env.REVIEW_BROWSER_PROFILE_DIRECTORY
+
+    const env = loadEnv()
+
+    assert.equal(
+        env.REVIEW_BROWSER_USER_DATA_DIR_ROOT,
+        'C:\\Users\\tranb\\AppData\\Local\\Google\\Chrome\\User Data',
+    )
+    assert.equal(env.REVIEW_BROWSER_PROFILE_DIRECTORY_VALUE, 'Default')
+})
+
+test('browser env respects an explicit profile directory when user data root is provided directly', () => {
+    process.env.REVIEW_BROWSER_USER_DATA_DIR =
+        'C:\\Users\\tranb\\AppData\\Local\\Google\\Chrome\\User Data'
+    process.env.REVIEW_BROWSER_PROFILE_DIRECTORY = 'Profile 1'
+
+    const env = loadEnv()
+
+    assert.equal(
+        env.REVIEW_BROWSER_USER_DATA_DIR_ROOT,
+        'C:\\Users\\tranb\\AppData\\Local\\Google\\Chrome\\User Data',
+    )
+    assert.equal(env.REVIEW_BROWSER_PROFILE_DIRECTORY_VALUE, 'Profile 1')
+})
 
 test('browser review tool rewrites automation URLs to enforce a stable language', () => {
     process.env.REVIEW_BROWSER_LANGUAGE_CODE = 'en'
@@ -18,6 +51,60 @@ test('browser review tool rewrites automation URLs to enforce a stable language'
 
     assert.equal(browserUrl.hostname, 'www.google.com')
     assert.equal(browserUrl.searchParams.get('hl'), 'en')
+})
+
+test('browser review tool builds a search fallback URL from restaurant identity', () => {
+    process.env.REVIEW_BROWSER_LANGUAGE_CODE = 'en'
+    const { buildSearchFallbackUrl } = loadBrowserReviewTool()
+    const fallbackUrl = new URL(buildSearchFallbackUrl('The 59 cafe', '59 Hải Phòng'))
+
+    assert.equal(fallbackUrl.pathname, '/maps/search/')
+    assert.equal(fallbackUrl.searchParams.get('api'), '1')
+    assert.match(fallbackUrl.searchParams.get('query') || '', /The 59 cafe/i)
+    assert.equal(fallbackUrl.searchParams.get('hl'), 'en')
+})
+
+test('browser review tool detects unresolved place URLs that lost the place identity', () => {
+    const { isUnresolvedPlaceUrl } = loadBrowserReviewTool()
+
+    assert.equal(
+        isUnresolvedPlaceUrl(
+            'https://www.google.com/maps/place//@16.0717637,108.214946,17z?hl=en',
+        ),
+        true,
+    )
+    assert.equal(
+        isUnresolvedPlaceUrl(
+            'https://www.google.com/maps/place/The+59+cafe/@16.0717586,108.2175209,17z',
+        ),
+        false,
+    )
+})
+
+test('browser review tool can detect when the page has already resolved the restaurant identity', async () => {
+    const { pageHasRestaurantIdentity } = loadBrowserReviewTool()
+    const page = {
+        title: async () => 'Google Maps - The 59 cafe',
+        locator: () => ({
+            evaluate: async () => false,
+        }),
+    }
+
+    await assert.doesNotReject(() => pageHasRestaurantIdentity(page, 'The 59 cafe'))
+    assert.equal(await pageHasRestaurantIdentity(page, 'The 59 cafe'), true)
+})
+
+test('browser review tool can detect when the page has not resolved the restaurant identity yet', async () => {
+    const { pageHasRestaurantIdentity } = loadBrowserReviewTool()
+    const page = {
+        title: async () => 'Google Maps',
+        locator: () => ({
+            evaluate: async (_fn, normalizedName) =>
+                'directions save nearby'.includes(normalizedName),
+        }),
+    }
+
+    assert.equal(await pageHasRestaurantIdentity(page, 'The 59 cafe'), false)
 })
 
 test('browser review tool keeps the saved Google Maps place URL instead of replacing it with a search query', () => {
@@ -113,6 +200,119 @@ test('browser review tool still respects a hard safety ceiling in auto-target mo
     assert.equal(plan.targetReviewCount, 200)
 })
 
+test('browser review tool switches to a recent-first target for incremental sync', () => {
+    process.env.REVIEW_BROWSER_MAX_REVIEWS = '0'
+    process.env.REVIEW_BROWSER_HARD_MAX_REVIEWS = '320'
+    process.env.REVIEW_BROWSER_RECENT_SYNC_TARGET = '120'
+    const { buildReviewCollectionPlan } = loadBrowserReviewTool()
+
+    const plan = buildReviewCollectionPlan({
+        advertisedTotalReviews: 286,
+        smartSyncEnabled: true,
+    })
+
+    assert.equal(plan.strategy, 'INCREMENTAL')
+    assert.equal(plan.targetReviewCount, 120)
+})
+
+test('browser review tool keeps explicit target overrides ahead of smart incremental mode', () => {
+    process.env.REVIEW_BROWSER_MAX_REVIEWS = '180'
+    process.env.REVIEW_BROWSER_HARD_MAX_REVIEWS = '320'
+    process.env.REVIEW_BROWSER_RECENT_SYNC_TARGET = '120'
+    const { buildReviewCollectionPlan } = loadBrowserReviewTool()
+
+    const plan = buildReviewCollectionPlan({
+        advertisedTotalReviews: 286,
+        smartSyncEnabled: true,
+    })
+
+    assert.equal(plan.strategy, 'FULL')
+    assert.equal(plan.explicitTarget, 180)
+    assert.equal(plan.targetReviewCount, 180)
+})
+
+test('browser review tool respects explicit target overrides passed by the importer', () => {
+    process.env.REVIEW_BROWSER_MAX_REVIEWS = '0'
+    process.env.REVIEW_BROWSER_HARD_MAX_REVIEWS = '320'
+    const { buildReviewCollectionPlan } = loadBrowserReviewTool()
+
+    const plan = buildReviewCollectionPlan({
+        advertisedTotalReviews: 286,
+        smartSyncEnabled: true,
+        explicitTargetOverride: 24,
+        strategyOverride: 'INCREMENTAL',
+    })
+
+    assert.equal(plan.strategy, 'INCREMENTAL')
+    assert.equal(plan.explicitTarget, 24)
+    assert.equal(plan.targetReviewCount, 24)
+})
+
+test('browser review tool extracts inline network reviews from Google Maps payloads', () => {
+    const { extractRawNetworkReviewsFromPayloadText } = loadBrowserReviewTool()
+    const payload = `)]}'
+${JSON.stringify([
+    null,
+    [
+        [
+            'CIHMtestreviewid',
+            [
+                null,
+                null,
+                null,
+                null,
+                [
+                    null,
+                    null,
+                    ['https://www.google.com/maps/contrib/123/reviews?hl=en'],
+                    null,
+                    null,
+                    [
+                        'Alice Nguyen',
+                        'https://lh3.googleusercontent.com/avatar',
+                        ['https://www.google.com/maps/contrib/123?hl=en'],
+                        '123',
+                    ],
+                ],
+                null,
+                '2 weeks ago',
+            ],
+            [[5], null, [[null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, ['Friendly staff and very fast service. The coffee was good and the shop stayed quiet enough for working.']]]],
+            null,
+            [null, null, null, ['https://www.google.com/maps/reviews/data=!reviewshare?hl=en']],
+        ],
+    ],
+])}`
+
+    const reviews = extractRawNetworkReviewsFromPayloadText(payload)
+
+    assert.equal(reviews.length, 1)
+    assert.equal(reviews[0].externalId, 'CIHMtestreviewid')
+    assert.equal(reviews[0].authorName, 'Alice Nguyen')
+    assert.equal(reviews[0].rating, 5)
+    assert.equal(reviews[0].reviewDateLabel, '2 weeks ago')
+    assert.match(reviews[0].content, /friendly staff/i)
+})
+
+test('browser review tool uses a tighter scroll budget for recent-first incremental sync', () => {
+    process.env.REVIEW_BROWSER_SCROLL_STEPS = '24'
+    process.env.REVIEW_BROWSER_STALL_LIMIT = '6'
+    const { computeScrollPassBudget } = loadBrowserReviewTool()
+
+    const incrementalBudget = computeScrollPassBudget({
+        strategy: 'INCREMENTAL',
+        targetReviewCount: 60,
+    })
+    const fullBudget = computeScrollPassBudget({
+        strategy: 'FULL',
+        targetReviewCount: 60,
+    })
+
+    assert.equal(incrementalBudget, 24)
+    assert.equal(fullBudget, 60)
+    assert.ok(incrementalBudget < fullBudget)
+})
+
 test('browser review tool chooses the most plausible advertised count once reviews are collected', () => {
     const { pickAdvertisedReviewCount } = loadBrowserReviewTool()
 
@@ -150,4 +350,37 @@ test('browser review tool normalizes reviews and removes duplicates without dama
     assert.equal(reviews[1].authorName, '山田 太郎')
     assert.equal(reviews[1].content, '接客が遅い。料理がぬるい。')
     assert.equal(reviews[1].rating, 2)
+})
+
+test('browser review tool aborts non-text resources but keeps scripts and xhr requests', () => {
+    const { shouldAbortRequest } = loadBrowserReviewTool()
+
+    assert.equal(
+        shouldAbortRequest({
+            resourceType: () => 'image',
+            url: () => 'https://lh3.googleusercontent.com/p/AF1QipImage=s220',
+        }),
+        true,
+    )
+    assert.equal(
+        shouldAbortRequest({
+            resourceType: () => 'font',
+            url: () => 'https://fonts.gstatic.com/s/inter/v20.woff2',
+        }),
+        true,
+    )
+    assert.equal(
+        shouldAbortRequest({
+            resourceType: () => 'xhr',
+            url: () => 'https://www.google.com/maps/preview/review/listentitiesreviews',
+        }),
+        false,
+    )
+    assert.equal(
+        shouldAbortRequest({
+            resourceType: () => 'script',
+            url: () => 'https://maps.googleapis.com/maps-api-v3/api/js/59/1a/main.js',
+        }),
+        false,
+    )
 })

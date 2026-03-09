@@ -149,7 +149,25 @@ function collectTokenKeywords(text) {
     )
 }
 
-async function analyzeReview({ content, rating }) {
+function extractComplaintKeywords(content) {
+    const normalizedText = normalizeText(content)
+
+    if (!normalizedText) {
+        return []
+    }
+
+    const foldedText = foldLatinText(content)
+
+    const negativeMatches = collectPhraseMatches(normalizedText, foldedText, NEGATIVE_KEYWORDS)
+
+    if (negativeMatches.length > 0) {
+        return unique(negativeMatches).slice(0, 5)
+    }
+
+    return collectTokenKeywords(normalizedText).slice(0, 5)
+}
+
+function analyzeReviewSync({ content, rating }) {
     const normalizedText = normalizeText(content)
     const foldedText = foldLatinText(content)
 
@@ -188,20 +206,19 @@ async function analyzeReview({ content, rating }) {
         }
     }
 
-    if (negativeMatches.length > 0) {
-        return {
-            label,
-            keywords: unique(negativeMatches).slice(0, 5),
-        }
-    }
-
     return {
         label,
-        keywords: collectTokenKeywords(normalizedText).slice(0, 5),
+        keywords: extractComplaintKeywords(content),
     }
+}
+
+async function analyzeReview(input) {
+    return analyzeReviewSync(input)
 }
 
 module.exports = {
     analyzeReview,
+    analyzeReviewSync,
+    extractComplaintKeywords,
     normalizeText,
 }

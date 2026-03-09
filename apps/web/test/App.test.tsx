@@ -512,4 +512,21 @@ describe('Sentify app shell', () => {
       expect(getRestaurantDetailMock).toHaveBeenLastCalledWith('rest-2')
     })
   })
+
+  it('does not refetch restaurant detail when switching between app tabs', async () => {
+    mockAuthenticatedSession({ restaurants: [createMembership()] })
+    window.location.hash = '#/app'
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    expect(await screen.findByText('Operational triage dashboard')).toBeInTheDocument()
+    expect(getRestaurantDetailMock).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getAllByRole('button', { name: /reviews/i })[0])
+
+    expect((await screen.findAllByText('Review evidence')).length).toBeGreaterThan(0)
+    expect(getRestaurantDetailMock).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Loading restaurant...')).not.toBeInTheDocument()
+  })
 })
